@@ -1,0 +1,24 @@
+StockPilot {{ .Chart.AppVersion }} deployed to namespace "{{ .Release.Namespace }}".
+
+  Backend image : {{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}
+  Frontend image: {{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}
+
+Check the rollout:
+  kubectl get pods,svc,ingress,hpa -n {{ .Release.Namespace }}
+
+{{- if .Values.ingress.enabled }}
+{{- if .Values.ingress.host }}
+Open: http://{{ .Values.ingress.host }}
+{{- else }}
+Open the Traefik load balancer address:
+  kubectl get svc -n traefik traefik -o jsonpath='{.status.loadBalancer.ingress[0].hostname}{"\n"}'
+{{- end }}
+{{- end }}
+
+Without an ingress controller:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "stockpilot.frontendName" . }} 8080:{{ .Values.frontend.servicePort }}
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "stockpilot.backendName" . }} 8000:{{ .Values.backend.port }}
+  curl http://localhost:8000/metrics
+
+Run the Helm test:
+  helm test {{ .Release.Name }} -n {{ .Release.Namespace }}

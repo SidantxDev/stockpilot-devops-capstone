@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "stockpilot.fullname" . }}-test-api
+  labels:
+    {{- include "stockpilot.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: curl
+      image: curlimages/curl:8.16.0
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      command:
+        - sh
+        - -c
+        - |
+          set -e
+          curl -fsS http://{{ include "stockpilot.backendName" . }}:{{ .Values.backend.port }}/ready
+          curl -fsS http://{{ include "stockpilot.backendName" . }}:{{ .Values.backend.port }}/api/products/stats
+          curl -fsS -o /dev/null http://{{ include "stockpilot.frontendName" . }}:{{ .Values.frontend.servicePort }}/
+          echo "StockPilot API and frontend are reachable"

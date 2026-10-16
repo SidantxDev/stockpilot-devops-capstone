@@ -1,0 +1,11 @@
+# AWS EKS overrides (used by the Argo CD Application in k8s/argocd/).
+# Images and tags come from values.yaml, which CI keeps up to date.
+
+postgres:
+  storage:
+    storageClassName: gp3
+    size: 5Gi
+
+ingress:
+  className: traefik
+  host: "" # reach the app via the Traefik load balancer hostname

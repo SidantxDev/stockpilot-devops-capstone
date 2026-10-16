@@ -1,0 +1,94 @@
+# Default values for the StockPilot chart.
+#
+# The CI/CD pipeline rewrites the two `tag:` lines marked "ci:image-tag" with
+# the Git commit SHA on every push to main. Argo CD then syncs the change.
+
+imagePullSecrets: []
+# - name: ghcr-pull   # only needed if the GHCR packages are private
+
+backend:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/sidantxdev/stockpilot-backend
+    tag: "latest-build" # ci:image-tag
+    pullPolicy: IfNotPresent
+  port: 8000
+  env:
+    APP_ENV: kubernetes
+    LOG_LEVEL: info
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 60
+  podDisruptionBudget:
+    minAvailable: 1
+
+frontend:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/sidantxdev/stockpilot-frontend
+    tag: "latest-build" # ci:image-tag
+    pullPolicy: IfNotPresent
+  port: 8080
+  servicePort: 80
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "17-alpine"
+  database: stockpilot
+  username: stockpilot
+  # Classroom default. For anything real create a Secret yourself and set
+  # existingSecret (it must contain the key `postgres-password`).
+  password: "stockpilot-k8s-demo"
+  existingSecret: ""
+  storage:
+    size: 5Gi
+    storageClassName: "" # "" = cluster default (gp3 on EKS via k8s/storageclass-gp3.yaml)
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+ingress:
+  enabled: true
+  className: traefik
+  host: "" # empty = match any host (e.g. the AWS load balancer DNS name)
+  annotations: {}
+  tls: []
+
+# Prometheus Operator integration (kube-prometheus-stack). Only rendered when
+# the monitoring.coreos.com CRDs exist in the cluster.
+serviceMonitor:
+  enabled: true
+  interval: 15s
+  labels:
+    release: kube-prometheus-stack
+
+prometheusRule:
+  enabled: true
+
+grafanaDashboard:
+  enabled: true
+  # Grafana's dashboard sidecar picks up ConfigMaps with this label.
+  labelKey: grafana_dashboard
+  labelValue: "1"

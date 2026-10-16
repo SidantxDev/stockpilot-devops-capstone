@@ -1,0 +1,27 @@
+# Local cluster overrides (Docker Desktop Kubernetes, kind or minikube).
+#
+#   docker compose build            # builds stockpilot-*:local images
+#   helm upgrade --install stockpilot ./helm/stockpilot -n stockpilot -f helm/stockpilot/values-dev.yaml
+#
+# Add "127.0.0.1 stockpilot.local" to your hosts file, then open http://stockpilot.local
+
+backend:
+  image:
+    repository: stockpilot-backend
+    tag: local
+    pullPolicy: Never
+  autoscaling:
+    maxReplicas: 4
+
+frontend:
+  image:
+    repository: stockpilot-frontend
+    tag: local
+    pullPolicy: Never
+
+postgres:
+  storage:
+    size: 1Gi
+
+ingress:
+  host: stockpilot.local
