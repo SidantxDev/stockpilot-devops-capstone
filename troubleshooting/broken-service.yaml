@@ -1,0 +1,53 @@
+# LAB 2 - Service with no endpoints
+# The Pods are healthy, but the Service selector has a typo
+# (component: backnd), so it selects nothing and traffic goes nowhere.
+#
+#   kubectl apply -f troubleshooting/broken-service.yaml
+#   kubectl get pods -n stockpilot-lab --show-labels
+#   kubectl get svc,endpointslices -n stockpilot-lab      # no endpoints for echo-api
+#   kubectl run -n stockpilot-lab tmp --rm -it --image=curlimages/curl:8.16.0 --restart=Never -- \
+#     curl -m 3 http://echo-api:8080                        # times out / connection refused
+#
+# Fix: make the selector match the Pod labels:
+#   kubectl patch svc echo-api -n stockpilot-lab -p '{"spec":{"selector":{"app":"echo-api","component":"backend"}}}'
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stockpilot-lab
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-api
+  namespace: stockpilot-lab
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: echo-api
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: echo-api
+        component: backend
+    spec:
+      containers:
+        - name: echo
+          image: hashicorp/http-echo:1.0
+          args: ["-listen=:8080", "-text=hello from echo-api"]
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-api
+  namespace: stockpilot-lab
+spec:
+  selector:
+    app: echo-api
+    component: backnd # <-- typo: no Pod has this label
+  ports:
+    - port: 8080
+      targetPort: 8080

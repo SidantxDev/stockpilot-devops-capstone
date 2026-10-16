@@ -1,0 +1,36 @@
+# LAB 1 - ImagePullBackOff
+# The tag below does not exist in GHCR, so the kubelet cannot pull the image.
+#
+#   kubectl apply -f troubleshooting/broken-image.yaml
+#   kubectl get pods -n stockpilot-lab                    # ErrImagePull -> ImagePullBackOff
+#   kubectl describe pod -n stockpilot-lab -l app=broken-image
+#   kubectl get events -n stockpilot-lab --sort-by=.lastTimestamp
+#
+# Fix: point the image at a tag that exists (the commit SHA CI pushed):
+#   kubectl set image -n stockpilot-lab deployment/broken-image \
+#     backend=ghcr.io/sidantxdev/stockpilot-backend:<git-sha>
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stockpilot-lab
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broken-image
+  namespace: stockpilot-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: broken-image
+  template:
+    metadata:
+      labels:
+        app: broken-image
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/sidantxdev/stockpilot-backend:v9.9.9-does-not-exist
+          ports:
+            - containerPort: 8000

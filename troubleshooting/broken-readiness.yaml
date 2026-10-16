@@ -1,0 +1,48 @@
+# LAB 3 - Running but not Ready
+# The backend starts (liveness /health is fine) but it points at a database
+# host that does not exist, so readiness /ready returns 503. The Pod shows
+# 0/1 READY and is kept out of the Service, so users never hit it.
+#
+#   kubectl apply -f troubleshooting/broken-readiness.yaml
+#   kubectl get pods -n stockpilot-lab -l app=not-ready        # Running, 0/1 READY
+#   kubectl describe pod -n stockpilot-lab -l app=not-ready     # "Readiness probe failed: HTTP probe failed with statuscode: 503"
+#   kubectl logs -n stockpilot-lab -l app=not-ready
+#
+# Lesson: liveness answers "is the process alive?", readiness answers
+# "can it serve traffic right now?". Fix: set a reachable DATABASE_URL.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stockpilot-lab
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: not-ready
+  namespace: stockpilot-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: not-ready
+  template:
+    metadata:
+      labels:
+        app: not-ready
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/sidantxdev/stockpilot-backend:REPLACE_WITH_GIT_SHA
+          env:
+            - name: RUN_MIGRATIONS
+              value: "false"
+            - name: DATABASE_URL
+              value: postgresql+psycopg://stockpilot:wrong@db-that-does-not-exist:5432/stockpilot
+          ports:
+            - name: http
+              containerPort: 8000
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+            periodSeconds: 5
