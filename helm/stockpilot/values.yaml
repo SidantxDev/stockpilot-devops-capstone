@@ -10,7 +10,7 @@ backend:
   replicaCount: 2
   image:
     repository: ghcr.io/sidantxdev/stockpilot-backend
-    tag: "fc3e7dbe119e23b2866d23868fa0aad0e6fc167c" # ci:image-tag
+    tag: "01f8c2d9f283ba03f27ff028a0cecd42afd69367" # ci:image-tag
     pullPolicy: IfNotPresent
   port: 8000
   env:
@@ -35,7 +35,7 @@ frontend:
   replicaCount: 2
   image:
     repository: ghcr.io/sidantxdev/stockpilot-frontend
-    tag: "fc3e7dbe119e23b2866d23868fa0aad0e6fc167c" # ci:image-tag
+    tag: "01f8c2d9f283ba03f27ff028a0cecd42afd69367" # ci:image-tag
     pullPolicy: IfNotPresent
   port: 8080
   servicePort: 80
