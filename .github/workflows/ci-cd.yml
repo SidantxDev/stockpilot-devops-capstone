@@ -32,7 +32,7 @@ jobs:
   # ---------------------------------------------------------------- TEST ---
   backend-tests:
     name: Backend · lint + pytest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: backend
@@ -63,7 +63,7 @@ jobs:
 
   frontend-build:
     name: Frontend · npm build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: frontend
@@ -93,7 +93,7 @@ jobs:
   build-scan-push:
     name: Image · ${{ matrix.service }}
     needs: [backend-tests, frontend-build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -191,7 +191,7 @@ jobs:
     name: Deploy · bump Helm image tag (GitOps)
     needs: build-scan-push
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
