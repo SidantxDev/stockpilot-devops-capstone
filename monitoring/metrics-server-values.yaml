@@ -1,0 +1,11 @@
+# metrics-server (chart metrics-server/metrics-server 3.14.0)
+# Provides the CPU/memory metrics API that `kubectl top` and the HPA use.
+#
+#   helm upgrade --install metrics-server metrics-server/metrics-server \
+#     -n kube-system --version 3.14.0 -f monitoring/metrics-server-values.yaml
+#
+# On kind/minikube add: --set 'args={--kubelet-insecure-tls}'
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
