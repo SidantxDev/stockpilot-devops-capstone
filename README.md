@@ -499,7 +499,7 @@ The order matters. The Traefik **NLB** and the Postgres **EBS volume** are creat
 - **PostgreSQL runs inside the cluster** (single-replica StatefulSet), which is fine for a classroom demo. In production I'd use **Amazon RDS** (Multi-AZ, automated backups, point-in-time restore) and drop the StatefulSet.
 - **The DB password is a chart default** in `values.yaml` (`stockpilot-k8s-demo`). For real use, create the Secret out-of-band (or with External Secrets / Sealed Secrets) and set `postgres.existingSecret`. Grafana and Argo CD admin passwords are generated at install time, not committed.
 - **No TLS.** The app is served over plain HTTP on the NLB hostname. Production would add a domain, cert-manager / ACM and HTTPS redirects.
-- **GHCR packages must be public** (or an `imagePullSecret` configured) for EKS to pull them. GHCR packages start private.
+- **GHCR images are public** because they are linked to this public repo (`org.opencontainers.image.source` label), so EKS pulls them without credentials. In a private repo you would set `imagePullSecrets` in `values.yaml`.
 - **Base-image CVEs without a fix** (Debian status `affected`) are reported but not blocking (`ignore-unfixed`); see §10.
 - **Single NAT Gateway** to save cost, which means one AZ is a single point of failure for egress. Production would use one per AZ.
 - **Terraform state is local.** For a team, enable the commented S3 backend in `versions.tf` with locking.
