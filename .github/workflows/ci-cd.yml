@@ -1,0 +1,230 @@
+# StockPilot CI/CD
+#
+#   TEST  ──►  BUILD + TRIVY SCAN + PUSH (GHCR, tag = git SHA)  ──►  GITOPS (bump Helm values → Argo CD syncs)
+#
+# Pull requests run TEST and BUILD + SCAN only; nothing is pushed or deployed.
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "demo/**"
+      - "docs/**"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------- TEST ---
+  backend-tests:
+    name: Backend · lint + pytest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint (flake8)
+        run: flake8 app tests
+
+      - name: Run pytest (fails the build on any test failure)
+        run: pytest -v --junitxml=pytest-report.xml
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pytest-report
+          path: backend/pytest-report.xml
+
+  frontend-build:
+    name: Frontend · npm build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build React app
+        run: npm run build
+        env:
+          VITE_APP_VERSION: ${{ github.sha }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+  # ------------------------------------------- BUILD + SECURITY SCAN + PUSH ---
+  build-scan-push:
+    name: Image · ${{ matrix.service }}
+    needs: [backend-tests, frontend-build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compute image name (GHCR requires lowercase)
+        id: meta
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "image=${REGISTRY}/${owner}/stockpilot-${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build image (loaded locally for scanning)
+        uses: docker/build-push-action@v7
+        with:
+          context: ./${{ matrix.service }}
+          load: true
+          push: false
+          tags: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+          build-args: |
+            APP_VERSION=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      # Human-readable report in the job log + job summary (never fails).
+      - name: Trivy scan · report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+          scanners: vuln
+          severity: LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          output: trivy-${{ matrix.service }}.txt
+          exit-code: "0"
+          version: v0.76.0
+
+      - name: Publish Trivy report to job summary
+        if: always()
+        run: |
+          {
+            echo "### Trivy scan · stockpilot-${{ matrix.service }}"
+            echo '```'
+            cat trivy-${{ matrix.service }}.txt 2>/dev/null || echo "no report"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Security gate: any fixable HIGH or CRITICAL CVE fails the pipeline,
+      # so a vulnerable image is never pushed.
+      - name: Trivy scan · gate (HIGH,CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+          version: v0.76.0
+          skip-setup-trivy: true
+
+      - name: Upload Trivy report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-${{ matrix.service }}
+          path: trivy-${{ matrix.service }}.txt
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image (tag = commit SHA)
+        if: github.event_name != 'pull_request'
+        run: docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}"
+
+  # ------------------------------------------------------------- DEPLOY ---
+  # GitOps: CI never talks to the cluster. It commits the new image tag to the
+  # Helm values file; Argo CD notices the change and syncs the cluster.
+  gitops-deploy:
+    name: Deploy · bump Helm image tag (GitOps)
+    needs: build-scan-push
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Update image repository + tag in helm/stockpilot/values.yaml
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          values=helm/stockpilot/values.yaml
+          sed -i -E "s#^(\s*repository:\s*).*/stockpilot-backend\s*\$#\1${REGISTRY}/${owner}/stockpilot-backend#" "$values"
+          sed -i -E "s#^(\s*repository:\s*).*/stockpilot-frontend\s*\$#\1${REGISTRY}/${owner}/stockpilot-frontend#" "$values"
+          sed -i -E "s#^(\s*tag:\s*).*\# ci:image-tag\s*\$#\1\"${GITHUB_SHA}\" \# ci:image-tag#" "$values"
+          git diff --stat
+          grep -nE "repository:|tag:" "$values"
+
+      - name: Commit and push
+        run: |
+          if git diff --quiet; then
+            echo "Image tag already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "deploy: roll out images ${GITHUB_SHA::7} via Argo CD [skip ci]"
+          git push origin HEAD:main
+
+      - name: Summary
+        run: |
+          {
+            echo "### Deployed via GitOps"
+            echo "- Backend: \`${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/stockpilot-backend:${GITHUB_SHA}\`"
+            echo "- Frontend: \`${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/stockpilot-frontend:${GITHUB_SHA}\`"
+            echo "- Argo CD will sync \`helm/stockpilot\` to the cluster (auto-sync, ~3 min poll or instant via webhook)."
+          } >> "$GITHUB_STEP_SUMMARY"
