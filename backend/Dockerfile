@@ -10,7 +10,9 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
+# pip is not needed at runtime; removing it from the venv also removes the
+# libraries it vendors (urllib3, msgpack...), which Trivy would otherwise flag.
+RUN pip install --upgrade pip     && pip install -r requirements.txt     && python -m pip uninstall -y pip setuptools wheel
 
 # ---- Stage 2: slim runtime image ------------------------------------------
 FROM python:3.12-slim AS runtime
