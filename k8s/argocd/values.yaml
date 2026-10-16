@@ -1,0 +1,23 @@
+# Argo CD Helm values (chart argo/argo-cd 10.10.5)
+#   helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace \
+#     --version 10.10.5 -f k8s/argocd/values.yaml
+#
+# The UI is reached with a port-forward, so TLS termination is not needed:
+#   kubectl port-forward -n argocd svc/argocd-server 8443:80   -> http://localhost:8443
+#   user: admin   password: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
+configs:
+  params:
+    server.insecure: true
+  cm:
+    # Poll Git every 60s instead of the default 3 minutes (faster demo).
+    timeout.reconciliation: 60s
+
+dex:
+  enabled: false
+
+notifications:
+  enabled: false
+
+server:
+  service:
+    type: ClusterIP

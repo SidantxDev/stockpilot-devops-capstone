@@ -1,0 +1,39 @@
+# GitOps: Argo CD watches helm/stockpilot on the main branch and keeps the
+# cluster in sync with it. CI only changes Git (the image tag in values.yaml);
+# Argo CD does the actual deployment.
+#
+#   kubectl apply -f k8s/argocd/application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stockpilot
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/SidantxDev/stockpilot-devops-capstone.git
+    targetRevision: main
+    path: helm/stockpilot
+    helm:
+      releaseName: stockpilot
+      valueFiles:
+        - values.yaml
+        - values-eks.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stockpilot
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false # k8s/namespace.yaml owns the namespace (with Pod Security labels)
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

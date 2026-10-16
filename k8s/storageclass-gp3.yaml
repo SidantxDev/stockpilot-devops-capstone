@@ -1,0 +1,16 @@
+# EKS only. New EKS clusters no longer mark any StorageClass as default, so
+# the PostgreSQL PersistentVolumeClaim would stay Pending without this.
+# Backed by the aws-ebs-csi-driver add-on that Terraform installs.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  encrypted: "true"
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+allowVolumeExpansion: true
