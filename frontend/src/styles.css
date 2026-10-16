@@ -66,7 +66,7 @@ small {
 /* ---------- layout ---------- */
 .layout {
   display: grid;
-  grid-template-columns: 248px 1fr;
+  grid-template-columns: 248px minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -370,6 +370,11 @@ th {
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   background: #fafbfc;
+  white-space: nowrap;
+}
+
+.product-cell {
+  min-width: 220px;
 }
 
 td {
@@ -703,7 +708,7 @@ tbody tr:hover {
 /* ---------- responsive ---------- */
 @media (max-width: 1180px) {
   .grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .side-col {
@@ -713,7 +718,7 @@ tbody tr:hover {
 
 @media (max-width: 900px) {
   .layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sidebar {
@@ -806,6 +811,10 @@ tbody tr:hover {
     color: var(--muted);
     font-size: 0.78rem;
     text-align: left;
+  }
+
+  .product-cell {
+    min-width: 0;
   }
 
   td.actions {

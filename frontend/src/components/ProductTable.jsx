@@ -34,17 +34,21 @@ export default function ProductTable({ products, loading, onEdit, onAdjust, onDe
         <tbody>
           {products.map((p) => (
             <tr key={p.id}>
-              <td data-label="Product">
-                <strong>{p.name}</strong>
-                <small>
-                  {p.sku}
-                  {p.location ? ` · ${p.location}` : ''}
-                </small>
+              <td data-label="Product" className="product-cell">
+                <div>
+                  <strong>{p.name}</strong>
+                  <small>
+                    {p.sku}
+                    {p.location ? ` · ${p.location}` : ''}
+                  </small>
+                </div>
               </td>
               <td data-label="Category">{p.category}</td>
               <td data-label="Qty" className="num">
-                {p.quantity}
-                <small>reorder at {p.reorder_level}</small>
+                <div>
+                  {p.quantity}
+                  <small>reorder at {p.reorder_level}</small>
+                </div>
               </td>
               <td data-label="Unit price" className="num">
                 {formatINR(p.unit_price)}
